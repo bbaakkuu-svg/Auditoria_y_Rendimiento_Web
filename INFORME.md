@@ -49,7 +49,11 @@ Motor_V8.png
                        [ Desoptimización ]
 ```
 
-En el recuadro rojo del hilo Principal (Main thread) de YouTube, el motor V8 se encuentra en plena fase de atención de eventos de interacción y ejecución activa de scripts:Gestión de eventos de usuario (Evento: pointermove):El usuario está desplazando el cursor o interactuando sobre el reproductor de YouTube. El navegador captura el evento del puntero y llama al manejador de eventos correspondiente en JavaScript.   Ejecución recurrente de funciones (Llamada de función / Bloques amarillos):V8 está ejecutando la pila de llamadas asociada a ese movimiento (como calcular la posición de la barra de progreso del vídeo, mostrar/ocultar los controles del reproductor o calcular tooltips).   Muestreo del perfilador (Profiler - Sobrecarga de...n de perfiles):La barra gris inferior indica la sobrecarga del perfilador (profiling overhead) recopilando muestras de ejecución para rastrear qué funciones son las más lentas o repetitivas.   Tareas largas y cuellos de botella (Triángulos rojos):Los triángulos rojos en las esquinas superiores de los bloques alertan de tareas largas (Long Tasks) que saturan el hilo principal durante más tiempo del recomendado (> 50 ms), lo que puede causar microtirones (jank) en la fluidez de la interfaz de usuario.   
+En el recuadro rojo del hilo Principal (Main thread) de YouTube, el motor V8 se encuentra en plena fase de atención de eventos de interacción y ejecución activa de scripts:
+1. Gestión de eventos de usuario (Evento: pointermove):El usuario está desplazando el cursor o interactuando sobre el reproductor de YouTube. El navegador captura el evento del puntero y llama al manejador de eventos correspondiente en JavaScript.   
+2. Ejecución recurrente de funciones (Llamada de función / Bloques amarillos):V8 está ejecutando la pila de llamadas asociada a ese movimiento (como calcular la posición de la barra de progreso del vídeo, mostrar/ocultar los controles del reproductor o calcular tooltips).   
+3. Muestreo del perfilador (Profiler - Sobrecarga de...n de perfiles):La barra gris inferior indica la sobrecarga del perfilador (profiling overhead) recopilando muestras de ejecución para rastrear qué funciones son las más lentas o repetitivas.   
+4. Tareas largas y cuellos de botella (Triángulos rojos):Los triángulos rojos en las esquinas superiores de los bloques alertan de tareas largas (Long Tasks) que saturan el hilo principal durante más tiempo del recomendado (> 50 ms), lo que puede causar microtirones (jank) en la fluidez de la interfaz de usuario.   
 
 ---
 
@@ -58,26 +62,22 @@ En el recuadro rojo del hilo Principal (Main thread) de YouTube, el motor V8 se 
 El principio rector del **Sandbox** del navegador establece que *todo código descargado desde internet debe asumirse como potencialmente peligroso*, debiendo ejecutarse en un entorno estrictamente aislado del sistema operativo anfitrión.
 
 #### Prueba A: Código legítimo (Memoria interna)
-SandBox_Console.png
+[SanBox1](SandBox_Console.png)
 
 ```javascript
-const a = "eoo";
+const a = "Bienvenidos";
 console.log(a);
 // Salida: eoo (undefined como retorno)
 ```
 - **Comportamiento:** La variable se instancia en el contexto de ejecución global de la ventana (*Window scope*) y utiliza las APIs seguras del navegador sin salir de los límites de memoria asignados a la pestaña.
 
 #### Prueba B: Violación del Sandbox (Intento de acceso al disco local)
-SandBox_FileReader.png
+[SanBox2](SandBox_FileReader.png)
 
 ```javascript
-try {
-  const lector = new FileReader();
-  const archivoFalso = new File([""], "C:/Windows/win.ini");
-  lector.readAsText(archivoFalso);
-} catch (e) {
-  console.error("Fallo de seguridad:", e);
-}
+const r= new FileReader();
+r.readAsText("C:\Users\LENOVO\Desktop\Downloads");
+r.onLoad = function(){ console.log(r.result);}﻿﻿
 ```
 - **Restricción provocada:** 
 La restricción activada es el aislamiento de acceso directo al sistema de archivos local (Local File System Isolation) impuesto por el Sandbox del motor del navegador:

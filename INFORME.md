@@ -100,7 +100,9 @@ Inexistencia de rutas locales arbitrarias: Las APIs web del navegador (como File
 ### 4. Análisis de Bloqueo: Scripts vs Programación Tradicional.
 
 #### Identificación del script pesado
-En la auditoría de red (![DWEC-Act1.1.png](DWEC-Act1.1.png)) se identifican bundles de infraestructura modular como `base.js` o agregados de Polymer/Kevlar (`m=kevlar_base_module...`) cuyos tamaños descomprimidos en memoria superan ampliamente **1 MB**.
+![DWEC-Act1.1.png](DWEC-Act1.1.png)
+
+En la auditoría de red  se identifican bundles de infraestructura modular como `base.js` o agregados de Polymer/Kevlar (`m=kevlar_base_module...`) cuyos tamaños descomprimidos en memoria superan ampliamente **1 MB**.
 
 
 #### Impacto en la experiencia de usuario: Ejecución Síncrona vs Asíncrona (Event-Driven)

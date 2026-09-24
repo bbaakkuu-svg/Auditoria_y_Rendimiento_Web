@@ -31,6 +31,7 @@ A tenor de los modelos de ejecución analizados en la materia, YouTube opera baj
 ### 2. Destripando el Motor (Performance): Fases de Ejecución en V8.
 
 Durante una interacción típica en una aplicación SPA, el motor **V8** de Chromium (al igual que **SpiderMonkey** en Firefox o **JavaScriptCore** en Safari/Bun) procesa el código a través de cuatro fases fundamentales en el hilo principal (*Main Thread*):
+
 ![Motor_V8](Motor_V8.png)
 
 ```
@@ -110,9 +111,8 @@ En la auditoría de red  se identifican bundles de infraestructura modular como 
 | Dimensión técnica | Ejecución Síncrona Tradicional | Ejecución Asíncrona Orientada a Eventos |
 | :--- | :--- | :--- |
 | **Hilo Principal (*Main Thread*)** | Monopolizado por completo durante la descarga y la compilación JIT. | Libre. Descarga fuera del hilo de renderizado; ejecución diferida. |
-| **Construcción del DOM** | Bloqueo total del analizador (*Parser-blocking*). La pantalla permanece en blanco. | Continua. El árbol DOM y CSSOM se construyen sin interrupciones. |
+| **Construcción del DOM** | Bloqueo total del analizador (*Parser-blocking*). La pantalla permanece en blanco. | Continua. El árbol DOM  se construye sin interrupciones. |
 | **Bucle de Eventos (*Event Loop*)** | Congelado. No se despachan tareas ni microtareas de interacción del usuario. | Activo. La cola de tareas procesa clics, scroll y teclado de forma fluida. |
-| **Métricas Core Web Vitals** | TBT (*Total Blocking Time*) crítico e INP (*Interaction to Next Paint*) inaceptable. | TBT e INP optimizados; respuesta visual en menos de 100 ms (60 fps). |
 | **Percepción del usuario** | Interfaz no responsiva; advertencia del navegador: *"Esta página no responde"*. | Experiencia reactiva con hidratación progresiva de componentes. |
 
 

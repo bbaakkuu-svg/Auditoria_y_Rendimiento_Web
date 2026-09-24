@@ -115,4 +115,72 @@ En la auditoría de red  se identifican bundles de infraestructura modular como 
 | **Bucle de Eventos (*Event Loop*)** | Congelado. No se despachan tareas ni microtareas de interacción del usuario. | Activo. La cola de tareas procesa clics, scroll y teclado de forma fluida. |
 | **Percepción del usuario** | Interfaz no responsiva; advertencia del navegador: *"Esta página no responde"*. | Experiencia reactiva con hidratación progresiva de componentes. |
 
+---
 
+## Actividad 2: El Gran Duelo de la Integración (defer vs async vs modules)
+
+**Criterios evaluados:** CE c (Lenguajes de cliente / ES6 Modules), CE e (Mecanismos de integración con HTML), CE f (Herramientas DevTools).  
+**Entorno de pruebas:** Google Chrome (Motor V8), servidor HTTP local y scripts pesados con bucle de 50 millones de iteraciones de CPU monitorizados con `console.time()` y logs de progreso.
+
+---
+
+### 1. Matriz Comparativa de Rendimiento y Renderizado
+
+| Escenario | Integración | Descarga JS | Ejecución | ¿Falla acceso a `#titulo`? | FCP (Pintado inicial) | Orden final de ejecución | Texto visible resultante |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| **A** | `<script>` en `<head>` | Bloqueante | Inmediata (interrumpe parser) | ❌ **Sí (TypeError)** | Muy tardío (tras bucles) | 1 ➔ 2 ➔ 3 | `"Hola"` (original) |
+| **B** | `<script>` antes de `</body>` | Bloqueante | Secuencial tras parsear body |  **No** | Tardío (bloquea primer frame) | 1 ➔ 2 ➔ 3 | `"Cambiado por Script 3"` |
+| **C** | `<script async>` en `<head>` | En paralelo | Inmediata al descargar | ⚠️ **Sí (en local / red rápida)** | Variable (carrera) | Indeterminado | Indeterminado / Error |
+| **D** | `<script defer>` en `<head>` | En paralelo | Diferida tras construir el DOM |  **No** | **Inmediato (óptimo)** | 1 ➔ 2 ➔ 3 | `"Cambiado por Script 3"` |
+| **E** | `<script type="module">` | En paralelo | Diferida por especificación |  **No** | **Inmediato (óptimo)** | 1 ➔ 2 ➔ 3 | `"Cambiado por Script 3"` |
+
+#### Evidencia de Rendimiento: Bloqueo del Hilo Principal y Retraso del FCP (Panel Performance)
+![Act2_Performance_Timeline](Act2_Performance_Timeline.png)
+
+---
+
+### 2. Diagnóstico Técnico por Escenario
+
+#### Escenario A: Script tradicional síncrono en `<head>`
+* **Mecanismo:** El analizador HTML lee de arriba hacia abajo y detiene en seco la construcción del DOM al toparse con `<script>`.
+* **Causa del fallo:** Intenta acceder a `document.getElementById('titulo')` cuando el nodo `<body>` aún no ha sido leído.
+* **Evidencia en consola (DevTools):**
+  ![Act2_EscenarioA_Console](Act2_EscenarioA_Console.png)
+* **Impacto:** Pantalla totalmente en blanco durante la descarga y ejecución de los 3 bucles. La modificación nunca se aplica.
+
+#### Escenario B: Script tradicional síncrono al final del `</body>`
+* **Mecanismo:** El parser ya ha creado el elemento `<h1 id="titulo">Hola</h1>` en el DOM antes de alcanzar las etiquetas de script.
+* **Resultado:** Accede al DOM sin errores y ejecuta secuencialmente: Script 1 ➔ Script 2 ➔ Script 3.
+* **Impacto:** Resuelve el problema del DOM, pero el hilo principal queda saturado antes del evento `load`, demorando la interactividad de la página. El texto final es `"Cambiado por Script 3"`.
+
+#### Escenario C: Atributo `async` en `<head>`
+* **Mecanismo:** Descarga asíncrona no bloqueante, pero **ejecución inmediata e interruptiva** en cuanto cada archivo termina de descargarse.
+* **Comportamiento empírico:**
+  1. **Condición de carrera (*Race Condition*):** El orden no se respeta; se ejecuta primero el script que termine antes de descargarse.
+  2. **Fallo de DOM:** En pruebas locales o conexiones rápidas, los scripts terminan de descargarse antes de que el motor llegue al `<body>`, provocando el mismo `TypeError` del Escenario A.
+
+#### Escenario D: Atributo `defer` en `<head>`
+* **Mecanismo:** Descarga en segundo plano mientras el HTML se parsea de forma ininterrumpida. La ejecución se pospone exactamente hasta que el DOM está completo, justo antes del evento `DOMContentLoaded`.
+* **Evidencia en consola (DevTools):**
+  ![Act2_EscenarioD_Defer](Act2_EscenarioD_Defer.png)
+* **Resultado:** 
+  * Cero bloqueos en el pintado inicial (**FCP inmediato**).
+  * Preserva el orden estricto de declaración (1 ➔ 2 ➔ 3).
+  * Modificación exitosa del DOM finalizando en `"Cambiado por Script 3"`. Es el estándar de oro para scripts dependientes del DOM.
+
+#### Escenario E: Módulos ES6 (`type="module"`) en `<head>`
+* **Mecanismo:** Los módulos de JavaScript moderno incorporan el comportamiento diferido (`defer`) de forma nativa por especificación.
+* **Particularidades clave de cliente (CE c):**
+  * **Ámbito modular:** Las variables no van al objeto global `window`, evitando colisiones entre scripts.
+  * **Modo Estricto:** Ejecución automática bajo `"use strict"`.
+  * **Requisito de servidor:** Si se ejecuta mediante protocolo `file:///`, el navegador bloquea los módulos por directivas de seguridad CORS. Requiere protocolo HTTP/HTTPS.
+
+---
+
+### 3. Conclusiones Técnicas de Aprendizaje (2º DAW)
+
+1. **Ciclo de Vida y DOM (CE e):** Un script nunca debe intentar mutar un nodo antes de que el parser lo registre. La posición en `<head>` sin atributos diferidos es un antipatrón crítico en desarrollo web cliente.
+2. **`async` vs `defer` (CE e):** 
+   * `async` debe reservarse exclusivamente para utilidades independientes y agnósticas al DOM (analítica, píxeles, publicidad).
+   * `defer` es obligatorio cuando existe dependencia del árbol DOM o dependencias secuenciales entre librerías.
+3. **Módulos ES6 (CE c):** Representan el presente y futuro del desarrollo web al aunar carga diferida nativa, encapsulamiento modular y compatibilidad con arquitecturas modernas basadas en empaquetadores (Vite, Webpack).

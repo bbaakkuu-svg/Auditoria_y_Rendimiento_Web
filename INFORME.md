@@ -31,7 +31,7 @@ A tenor de los modelos de ejecución analizados en la materia, YouTube opera baj
 ### 2. Destripando el Motor (Performance): Fases de Ejecución en V8.
 
 Durante una interacción típica en una aplicación SPA, el motor **V8** de Chromium (al igual que **SpiderMonkey** en Firefox o **JavaScriptCore** en Safari/Bun) procesa el código a través de cuatro fases fundamentales en el hilo principal (*Main Thread*):
-Motor_V8.png
+[Motor_V8](Motor_V8.png)
 
 ```
 [ Código Fuente JS ] 
@@ -62,7 +62,7 @@ En el recuadro rojo del hilo Principal (Main thread) de YouTube, el motor V8 se 
 El principio rector del **Sandbox** del navegador establece que *todo código descargado desde internet debe asumirse como potencialmente peligroso*, debiendo ejecutarse en un entorno estrictamente aislado del sistema operativo anfitrión.
 
 #### Prueba A: Código legítimo (Memoria interna)
-[SanBox1](SandBox_Console.png)
+[Sandbox1](SandBox_Console.png)
 
 ```javascript
 const a = "Bienvenidos";
@@ -72,7 +72,7 @@ console.log(a);
 - **Comportamiento:** La variable se instancia en el contexto de ejecución global de la ventana (*Window scope*) y utiliza las APIs seguras del navegador sin salir de los límites de memoria asignados a la pestaña.
 
 #### Prueba B: Violación del Sandbox (Intento de acceso al disco local)
-[SanBox2](SandBox_FileReader.png)
+[Sandbox2](SandBox_FileReader.png)
 
 ```javascript
 const r= new FileReader();

@@ -24,24 +24,14 @@
 | **Tiempo de carga** | `DOMContentLoaded`: 11.56 s | `Load`: 12.98 s |
 
 #### Análisis comparativo: SSR vs CSR
-A tenor de los modelos de ejecución analizados en la materia, YouTube opera bajo un esquema **CSR (Client-Side Rendering)** fundamentado en una arquitectura **App Shell**:
-
-```
-[ Servidor Web ] ──► Envía HTML esqueleto (~36 kB) + Bundles JS (>64 MB)
-                             │
-                             ▼
-[ Navegador Cliente ] ──► Ejecuta JS en V8 ──► Renderiza DOM dinámico e interactivo
-```
-
-1. **Enfoque Servidor (SSR tradicional):** El servidor ejecuta el código antes de la entrega y genera un HTML completamente estructurado con la información incrustada. Aunque ofrece mayor seguridad inicial y menor dependencia de la CPU del usuario, exige comunicación constante con el servidor ante cualquier cambio de estado.
-2. **Enfoque Cliente (CSR en SPA):** El HTML entregado carece de contenido semántico real (vídeos, títulos, comentarios); únicamente contiene metadatos (`<meta>`), enlaces a bundles y contenedores vacíos como `<ytd-app>`. 
-3. **Diagnóstico técnico:** El peso insignificante del documento inicial frente a los más de 64 MB de scripts JavaScript confirma que la carga de renderizado se traslada por completo al navegador del cliente. Esto descarga de trabajo computacional al servidor y permite una navegación fluida sin recargas completas de página, a expensas de requerir mayor potencia de procesamiento en el dispositivo del usuario.
+A tenor de los modelos de ejecución analizados en la materia, YouTube opera bajo un esquema **CSR (Client-Side Rendering)** fundamentado en el peso insignificante del documento inicial frente a los más de 64 MB de scripts JavaScript confirma que la carga de renderizado se traslada por completo al navegador del cliente. Esto descarga de trabajo computacional al servidor y permite una navegación fluida sin recargas completas de página, a expensas de requerir mayor potencia de procesamiento en el dispositivo del usuario.
 
 ---
 
 ### 2. Destripando el Motor (Performance): Fases de Ejecución en V8 (CE b, CE f)
 
 Durante una interacción típica en una aplicación SPA, el motor **V8** de Chromium (al igual que **SpiderMonkey** en Firefox o **JavaScriptCore** en Safari/Bun) procesa el código a través de cuatro fases fundamentales en el hilo principal (*Main Thread*):
+Motor_V8.png
 
 ```
 [ Código Fuente JS ] 
@@ -49,30 +39,17 @@ Durante una interacción típica en una aplicación SPA, el motor **V8** de Chro
          ▼ (1. Parser)
      [ AST ] 
          │
-         ▼ (2. Intérprete Ignition)
-   [ Bytecode ] ──► (3. Profiler / Monitoriza "Hot Code")
+         ▼ (2. Intérprete)
+   [ Bytecode ] ──► (3. Perfilado / Monitoriza "Hot Code")
          │                     │
-         │                     ▼ (4. TurboFan - Compilador Optimizador)
+         │                     ▼ (4. Compilador Optimizador)
          └─────────────► [ Código Máquina Nativo ]
                                │ (Si fallan suposiciones de tipo)
                                ▼
                        [ Desoptimización ]
 ```
 
-1. **Parser (Analizador sintáctico):**
-   - El analizador sintáctico (*Blink Parser* y el parser léxico de V8) traduce la secuencia plana de caracteres a una estructura jerárquica de árbol denominada **AST (Árbol de Sintaxis Abstracta)** y genera los ámbitos de variables (*Scopes*).
-   - Durante el **Parse HTML**, si el navegador encuentra un script síncrono, suspende la construcción del DOM hasta que el archivo se descargue y analice por completo.
-2. **Intérprete básico (Ignition):**
-   - Transforma el AST de forma inmediata en un *bytecode* intermedio.
-   - Permite arrancar la ejecución del script con una latencia mínima (*startup time* reducido), sin esperar a compilar todo el programa a código máquina.
-3. **Perfilado (Profiler):**
-   - Mientras el código se interpreta, el motor monitoriza continuamente qué funciones y bucles se ejecutan repetidamente (el denominado código caliente o *hot code*, como bucles o funciones de pintado frecuentes).
-   - Recopila información sobre los tipos de datos que entran en dichas funciones (*type feedback*).
-4. **Compilador optimizador (TurboFan):**
-   - Toma el *hot code* y lo compila directamente a código máquina ultrapotente optimizado para la CPU.
-   - **Desoptimización:** Si una función optimizada recibe repentinamente un tipo de dato inesperado (debido a la naturaleza dinámica de JavaScript), el motor invalida el código máquina generado y retrocede de inmediato al intérprete básico (*deopt*), preservando la consistencia de la ejecución.
-5. **Evaluate Script:**
-   - Corresponde a la ejecución de estas tareas en el procesador: asignación de memoria, registro de manejadores de eventos (*event listeners*) e invocación de las fases de *Layout/Reflow* y *Paint* sobre el DOM.
+En el recuadro rojo del hilo Principal (Main thread) de YouTube, el motor V8 se encuentra en plena fase de atención de eventos de interacción y ejecución activa de scripts:Gestión de eventos de usuario (Evento: pointermove):El usuario está desplazando el cursor o interactuando sobre el reproductor de YouTube. El navegador captura el evento del puntero y llama al manejador de eventos correspondiente en JavaScript.   Ejecución recurrente de funciones (Llamada de función / Bloques amarillos):V8 está ejecutando la pila de llamadas asociada a ese movimiento (como calcular la posición de la barra de progreso del vídeo, mostrar/ocultar los controles del reproductor o calcular tooltips).   Muestreo del perfilador (Profiler - Sobrecarga de...n de perfiles):La barra gris inferior indica la sobrecarga del perfilador (profiling overhead) recopilando muestras de ejecución para rastrear qué funciones son las más lentas o repetitivas.   Tareas largas y cuellos de botella (Triángulos rojos):Los triángulos rojos en las esquinas superiores de los bloques alertan de tareas largas (Long Tasks) que saturan el hilo principal durante más tiempo del recomendado (> 50 ms), lo que puede causar microtirones (jank) en la fluidez de la interfaz de usuario.   
 
 ---
 
@@ -81,6 +58,8 @@ Durante una interacción típica en una aplicación SPA, el motor **V8** de Chro
 El principio rector del **Sandbox** del navegador establece que *todo código descargado desde internet debe asumirse como potencialmente peligroso*, debiendo ejecutarse en un entorno estrictamente aislado del sistema operativo anfitrión.
 
 #### Prueba A: Código legítimo (Memoria interna)
+SandBox_Console.png
+
 ```javascript
 const a = "eoo";
 console.log(a);
@@ -89,6 +68,8 @@ console.log(a);
 - **Comportamiento:** La variable se instancia en el contexto de ejecución global de la ventana (*Window scope*) y utiliza las APIs seguras del navegador sin salir de los límites de memoria asignados a la pestaña.
 
 #### Prueba B: Violación del Sandbox (Intento de acceso al disco local)
+SandBox_FileReader.png
+
 ```javascript
 try {
   const lector = new FileReader();
@@ -98,11 +79,21 @@ try {
   console.error("Fallo de seguridad:", e);
 }
 ```
-- **Restricción provocada:** El navegador genera un error de seguridad (`SecurityError` / `Not allowed to load local resource`). 
+- **Restricción provocada:** 
+La restricción activada es el aislamiento de acceso directo al sistema de archivos local (Local File System Isolation) impuesto por el Sandbox del motor del navegador:
+Inexistencia de rutas locales arbitrarias: Las APIs web del navegador (como FileReader) no admiten bajo ningún concepto rutas de archivo absolutas o relativas en formato de cadena de texto (String como "C:\Users\..."). 
+
 - **Mecanismos de defensa activos:**
-  1. **Aislamiento del sistema de archivos:** JavaScript en el cliente no posee descriptores de archivo (*file handles*) del sistema anfitrión ni punteros a rutas absolutas (`file:///` o `C:/...`).
-  2. **Intervención y consentimiento del usuario:** La única vía legítima para que un script lea un archivo es mediante una acción manual, explícita y consciente del usuario (a través de `<input type="file">` o el *File System Access API* con selector nativo).
-  3. **Aislamiento de procesos (*Process Isolation*) y Política del Mismo Origen (*Same-Origin Policy*):** El proceso de renderizado no dispone de privilegios a nivel de kernel; si un script sufriese un ataque XSS o procediera de un sitio web malicioso, el Sandbox impide de forma inviolable que pueda sustraer documentos confidenciales, credenciales o inyectar código dañino en el sistema del usuario.
+  El Sandbox actúa como una barrera de aislamiento que impide que el código JavaScript descargado de internet interactúe directamente con el sistema operativo anfitrión:
+
+1. Protección contra filtración de datos confidenciales (Exfiltración):
+   Si una página web pudiera leer rutas arbitrarias como "C:\Users\...", cualquier sitio malicioso que visites podría ejecutar un script en segundo plano para leer y enviar a un servidor externo tus claves SSH, historiales, contraseñas, documentos de identidad o archivos del sistema sin tu conocimiento.
+
+2. Garantía del principio de mínimo privilegio y consentimiento explícito:
+   El modelo de seguridad web exige que el usuario sea el único que autoriza qué archivo específico puede ver la aplicación. El navegador jamás le otorga a un script la capacidad de inspeccionar carpetas o navegar libremente por el disco duro.
+
+3. Prevención de ejecución remota de código y manipulación:
+   Al bloquear el acceso directo al árbol de directorios local, se evita que scripts de terceros puedan modificar archivos de configuración del sistema operativo, inyectar malware o comprometer la integridad del equipo.
 
 ---
 
@@ -111,9 +102,6 @@ try {
 #### Identificación del script pesado
 En la auditoría de red ([DWEC-Act1.1.png](DWEC-Act1.1.png)) se identifican bundles de infraestructura modular como `base.js` o agregados de Polymer/Kevlar (`m=kevlar_base_module...`) cuyos tamaños descomprimidos en memoria superan ampliamente **1 MB**.
 
-#### ¿Por qué un lenguaje de script rinde diferente a uno tradicional?
-- **Programación tradicional (C++, Rust):** Se compila previamente y de forma estática a código máquina binario de bajo nivel; los tipos son fijos y el analizador detecta la mayoría de errores antes de la ejecución, logrando máxima velocidad y ejecución independiente.
-- **Programación de scripts (JavaScript):** Es dinámico e interpretado; el análisis léxico, la compilación JIT y la inferencia de tipos ocurren **en tiempo de ejecución** dentro del navegador del usuario.
 
 #### Impacto en la experiencia de usuario: Ejecución Síncrona vs Asíncrona (Event-Driven)
 
@@ -125,4 +113,4 @@ En la auditoría de red ([DWEC-Act1.1.png](DWEC-Act1.1.png)) se identifican bund
 | **Métricas Core Web Vitals** | TBT (*Total Blocking Time*) crítico e INP (*Interaction to Next Paint*) inaceptable. | TBT e INP optimizados; respuesta visual en menos de 100 ms (60 fps). |
 | **Percepción del usuario** | Interfaz no responsiva; advertencia del navegador: *"Esta página no responde"*. | Experiencia reactiva con hidratación progresiva de componentes. |
 
-**Conclusión:** Debido a la naturaleza monohilo (*single-threaded*) del motor de navegación, la asincronía y el modelo no bloqueante guiado por eventos constituyen la piedra angular del desarrollo web cliente moderno para manipular scripts pesados sin deteriorar el rendimiento.
+

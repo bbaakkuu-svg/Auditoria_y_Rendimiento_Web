@@ -15,4 +15,4 @@ console.timeEnd('Tiempo CPU - Script 2');
 // Intento de modificación del DOM
 document.getElementById('titulo').innerText = '¿Qué tal Script 2?';
 
-console.log('script2.js finalizado con éxito.');
+console.log('script2.js finalizado con éxito. (H1 mutado a "¿Qué tal Script 2?")');

@@ -15,4 +15,4 @@ console.timeEnd('Tiempo CPU - Script 3');
 // Intento de modificación del DOM
 document.getElementById('titulo').innerText = 'Cambiado por Script 3';
 
-console.log('script3.js finalizado con éxito.');
+console.log('✓ script3.js finalizado con éxito. DOM final: <h1 id="titulo">Cambiado por Script 3</h1>');

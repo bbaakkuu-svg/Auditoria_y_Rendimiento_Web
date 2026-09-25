@@ -24,7 +24,7 @@
 | **Tiempo de carga** | `DOMContentLoaded`: 11.56 s | `Load`: 12.98 s |
 
 #### Análisis comparativo: SSR vs CSR
-A tenor de los modelos de ejecución analizados en la materia, YouTube opera bajo un esquema **CSR (Client-Side Rendering)** fundamentado en el peso insignificante del documento inicial frente a los más de 64 MB de scripts JavaScript confirma que la carga de renderizado se traslada por completo al navegador del cliente. Esto descarga de trabajo computacional al servidor y permite una navegación fluida sin recargas completas de página, a expensas de requerir mayor potencia de procesamiento en el dispositivo del usuario.
+A tenor de los modelos de ejecución analizados en la materia, YouTube opera bajo un esquema **CSR (Client-Side Rendering)**. El peso insignificante del documento HTML inicial (~36 kB transferidos) frente a los más de 64 MB de scripts JavaScript descargados en memoria confirma que la carga de renderizado se traslada por completo al navegador del cliente. Esto descarga de trabajo computacional al servidor y permite una navegación fluida sin recargas completas de página, a expensas de requerir mayor potencia de procesamiento en el dispositivo del usuario.
 
 ---
 
@@ -50,11 +50,18 @@ Durante una interacción típica en una aplicación SPA, el motor **V8** de Chro
                        [ Desoptimización ]
 ```
 
-En el recuadro rojo del hilo Principal (Main thread) de YouTube, el motor V8 se encuentra en plena fase de atención de eventos de interacción y ejecución activa de scripts:
-1. Gestión de eventos de usuario (Evento: pointermove):El usuario está desplazando el cursor o interactuando sobre el reproductor de YouTube. El navegador captura el evento del puntero y llama al manejador de eventos correspondiente en JavaScript.   
-2. Ejecución recurrente de funciones (Llamada de función / Bloques amarillos):V8 está ejecutando la pila de llamadas asociada a ese movimiento (como calcular la posición de la barra de progreso del vídeo, mostrar/ocultar los controles del reproductor o calcular tooltips).   
-3. Muestreo del perfilador (Profiler - Sobrecarga de...n de perfiles):La barra gris inferior indica la sobrecarga del perfilador (profiling overhead) recopilando muestras de ejecución para rastrear qué funciones son las más lentas o repetitivas.   
-4. Tareas largas y cuellos de botella (Triángulos rojos):Los triángulos rojos en las esquinas superiores de los bloques alertan de tareas largas (Long Tasks) que saturan el hilo principal durante más tiempo del recomendado (> 50 ms), lo que puede causar microtirones (jank) en la fluidez de la interfaz de usuario.   
+En el recuadro rojo del hilo Principal (*Main Thread*) de YouTube, el motor V8 se encuentra en plena fase de atención de eventos de interacción y ejecución activa de scripts:
+
+##### Identificación de fases clave de DevTools (CE b, CE f):
+1. **Parsing HTML (Análisis de HTML):** Fase en la que el analizador sintáctico del navegador procesa el marcado HTML y construye los nodos del árbol DOM. En una SPA como YouTube, este trabajo se produce al cargar la estructura mínima inicial y se reactiva puntualmente cuando se inyectan nuevas plantillas o fragmentos de marcado.
+2. **Compile Code / JIT Compilation (Compilación de secuencias de comandos):** El motor V8 toma el árbol AST generado a partir del código JS y lo traduce a Bytecode mediante su intérprete (*Ignition*). Durante la ejecución, el perfilador detecta funciones de uso intensivo ("Hot Code") y el compilador optimizador (*TurboFan*) las compila sobre la marcha a código máquina nativo para maximizar la velocidad.
+3. **Evaluate Script (Evaluación de secuencias de comandos / Llamadas de función):** Fase de ejecución directa de la lógica en el hilo principal. Se aprecia en la densa sucesión de bloques amarillos (*Llamada de función*), donde V8 procesa los controladores de eventos y ejecuta la lógica interactiva.
+
+##### Desglose de la actividad observada en la captura (`Motor_V8.png`):
+1. **Gestión de eventos de usuario (Evento: pointermove):** El usuario está desplazando el cursor sobre el reproductor de YouTube. El navegador captura el evento y despacha el manejador correspondiente en JavaScript.
+2. **Ejecución recurrente de funciones (Llamada de función / Bloques amarillos):** V8 ejecuta la pila de llamadas asociada al movimiento (calcular posición de la barra de progreso, mostrar/ocultar controles del reproductor o calcular tooltips).
+3. **Muestreo del perfilador (Profiler - Sobrecarga de emisión de perfiles):** La barra gris inferior indica el *profiling overhead*, tomando muestras de la pila para identificar qué funciones consumen más CPU.
+4. **Tareas largas y cuellos de botella (Triángulos rojos):** Las marcas rojas en las esquinas superiores señalan *Long Tasks* (> 50 ms) que saturan el hilo principal, alertando de posibles microtirones (*jank*) en la fluidez de la interfaz.
 
 ---
 
@@ -68,7 +75,8 @@ El principio rector del **Sandbox** del navegador establece que *todo código de
 ```javascript
 const a = "Bienvenidos";
 console.log(a);
-// Salida: eoo (undefined como retorno)
+// Salida en consola: Bienvenidos
+// Valor de retorno de la sentencia: undefined
 ```
 - **Comportamiento:** La variable se instancia en el contexto de ejecución global de la ventana (*Window scope*) y utiliza las APIs seguras del navegador sin salir de los límites de memoria asignados a la pestaña.
 
@@ -76,24 +84,29 @@ console.log(a);
 ![Sandbox2](SandBox_FileReader.png)
 
 ```javascript
-const r= new FileReader();
-r.readAsText("C:\Users\LENOVO\Desktop\Downloads");
-r.onLoad = function(){ console.log(r.result);}﻿﻿
+const r = new FileReader();
+r.readAsText("C:\\Users\\LENOVO\\Desktop\\Downloads");
+r.onload = function() { console.log(r.result); };
 ```
+- **Error capturado en DevTools:**
+  ```text
+  Uncaught TypeError: Failed to execute 'readAsText' on 'FileReader': parameter 1 is not of type 'Blob'.
+  ```
+
 - **Restricción provocada:** 
-La restricción activada es el aislamiento de acceso directo al sistema de archivos local (Local File System Isolation) impuesto por el Sandbox del motor del navegador:
-Inexistencia de rutas locales arbitrarias: Las APIs web del navegador (como FileReader) no admiten bajo ningún concepto rutas de archivo absolutas o relativas en formato de cadena de texto (String como "C:\Users\..."). 
+  La restricción activada responde al aislamiento de acceso directo al sistema de archivos local (*Local File System Isolation*) impuesto por el Sandbox del motor del navegador:
+  * **Inexistencia de rutas locales arbitrarias:** Las APIs web del navegador (como `FileReader`) no admiten bajo ningún concepto rutas de archivo absolutas o relativas en formato de cadena de texto (`String` como `"C:\\Users\\..."`). Para que `FileReader` funcione, requiere obligatoriamente una referencia de tipo `File` o `Blob` obtenida mediante la interacción física y el consentimiento expreso del usuario (por ejemplo, a través de una etiqueta `<input type="file">` o arrastrar y soltar).
 
 - **Mecanismos de defensa activos:**
   El Sandbox actúa como una barrera de aislamiento que impide que el código JavaScript descargado de internet interactúe directamente con el sistema operativo anfitrión:
 
-1. Protección contra filtración de datos confidenciales (Exfiltración):
-   Si una página web pudiera leer rutas arbitrarias como "C:\Users\...", cualquier sitio malicioso que visites podría ejecutar un script en segundo plano para leer y enviar a un servidor externo tus claves SSH, historiales, contraseñas, documentos de identidad o archivos del sistema sin tu conocimiento.
+1. **Protección contra filtración de datos confidenciales (Exfiltración):**
+   Si una página web pudiera leer rutas arbitrarias como `"C:\\Users\\..."`, cualquier sitio malicioso que visites podría ejecutar un script en segundo plano para leer y enviar a un servidor externo tus claves SSH, historiales, contraseñas, documentos de identidad o archivos del sistema sin tu conocimiento.
 
-2. Garantía del principio de mínimo privilegio y consentimiento explícito:
+2. **Garantía del principio de mínimo privilegio y consentimiento explícito:**
    El modelo de seguridad web exige que el usuario sea el único que autoriza qué archivo específico puede ver la aplicación. El navegador jamás le otorga a un script la capacidad de inspeccionar carpetas o navegar libremente por el disco duro.
 
-3. Prevención de ejecución remota de código y manipulación:
+3. **Prevención de ejecución remota de código y manipulación:**
    Al bloquear el acceso directo al árbol de directorios local, se evita que scripts de terceros puedan modificar archivos de configuración del sistema operativo, inyectar malware o comprometer la integridad del equipo.
 
 ---
@@ -149,7 +162,7 @@ En la auditoría de red  se identifican bundles de infraestructura modular como 
 * **Impacto:** Pantalla totalmente en blanco durante la descarga y ejecución de los 3 bucles. La modificación nunca se aplica.
 
 #### Escenario B: Script tradicional síncrono al final del `</body>`
-* **Mecanismo:** El parser ya ha creado el elemento `<h1 id="titulo">Bienbenidos</h1>` en el DOM antes de alcanzar las etiquetas de script.
+* **Mecanismo:** El parser ya ha creado el elemento `<h1 id="titulo">Hola</h1>` en el DOM antes de alcanzar las etiquetas de script.
 * **Resultado:** Accede al DOM sin errores y ejecuta secuencialmente: Script 1 ➔ Script 2 ➔ Script 3.
 * **Impacto:** Resuelve el problema del DOM, pero el hilo principal queda saturado antes del evento `load`, demorando la interactividad de la página. El texto final es `"Cambiado por Script 3"`.
 

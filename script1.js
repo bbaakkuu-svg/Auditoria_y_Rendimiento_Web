@@ -15,4 +15,4 @@ console.timeEnd('Tiempo CPU - Script 1');
 // Intento de modificación del DOM
 document.getElementById('titulo').innerText = 'Hola Script 1';
 
-console.log('script1.js finalizado con éxito.');
+console.log('script1.js finalizado con éxito. (H1 mutado a "Hola Script 1")');

@@ -128,9 +128,9 @@ En la auditoría de red  se identifican bundles de infraestructura modular como 
 
 | Escenario | Integración | Descarga JS | Ejecución | ¿Falla acceso a `#titulo`? | FCP (Pintado inicial) | Orden final de ejecución | Texto visible resultante |
 | :--- | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
-| **A** | `<script>` en `<head>` | Bloqueante | Inmediata (interrumpe parser) | ❌ **Sí (TypeError)** | Muy tardío (tras bucles) | 1 ➔ 2 ➔ 3 | `"Hola"` (original) |
+| **A** | `<script>` en `<head>` | Bloqueante | Inmediata (interrumpe parser) |  **Sí (TypeError)** | Muy tardío (tras bucles) | 1 ➔ 2 ➔ 3 | `"Hola"` (original) |
 | **B** | `<script>` antes de `</body>` | Bloqueante | Secuencial tras parsear body |  **No** | Tardío (bloquea primer frame) | 1 ➔ 2 ➔ 3 | `"Cambiado por Script 3"` |
-| **C** | `<script async>` en `<head>` | En paralelo | Inmediata al descargar | ⚠️ **Sí (en local / red rápida)** | Variable (carrera) | Indeterminado | Indeterminado / Error |
+| **C** | `<script async>` en `<head>` | En paralelo | Inmediata al descargar |  **Sí (en local / red rápida)** | Variable (carrera) | Indeterminado | Indeterminado / Error |
 | **D** | `<script defer>` en `<head>` | En paralelo | Diferida tras construir el DOM |  **No** | **Inmediato (óptimo)** | 1 ➔ 2 ➔ 3 | `"Cambiado por Script 3"` |
 | **E** | `<script type="module">` | En paralelo | Diferida por especificación |  **No** | **Inmediato (óptimo)** | 1 ➔ 2 ➔ 3 | `"Cambiado por Script 3"` |
 
@@ -149,7 +149,7 @@ En la auditoría de red  se identifican bundles de infraestructura modular como 
 * **Impacto:** Pantalla totalmente en blanco durante la descarga y ejecución de los 3 bucles. La modificación nunca se aplica.
 
 #### Escenario B: Script tradicional síncrono al final del `</body>`
-* **Mecanismo:** El parser ya ha creado el elemento `<h1 id="titulo">Hola</h1>` en el DOM antes de alcanzar las etiquetas de script.
+* **Mecanismo:** El parser ya ha creado el elemento `<h1 id="titulo">Bienbenidos</h1>` en el DOM antes de alcanzar las etiquetas de script.
 * **Resultado:** Accede al DOM sin errores y ejecuta secuencialmente: Script 1 ➔ Script 2 ➔ Script 3.
 * **Impacto:** Resuelve el problema del DOM, pero el hilo principal queda saturado antes del evento `load`, demorando la interactividad de la página. El texto final es `"Cambiado por Script 3"`.
 
@@ -170,17 +170,10 @@ En la auditoría de red  se identifican bundles de infraestructura modular como 
 
 #### Escenario E: Módulos ES6 (`type="module"`) en `<head>`
 * **Mecanismo:** Los módulos de JavaScript moderno incorporan el comportamiento diferido (`defer`) de forma nativa por especificación.
-* **Particularidades clave de cliente (CE c):**
+* **Particularidades clave de cliente:**
   * **Ámbito modular:** Las variables no van al objeto global `window`, evitando colisiones entre scripts.
   * **Modo Estricto:** Ejecución automática bajo `"use strict"`.
   * **Requisito de servidor:** Si se ejecuta mediante protocolo `file:///`, el navegador bloquea los módulos por directivas de seguridad CORS. Requiere protocolo HTTP/HTTPS.
 
 ---
 
-### 3. Conclusiones Técnicas de Aprendizaje (2º DAW)
-
-1. **Ciclo de Vida y DOM (CE e):** Un script nunca debe intentar mutar un nodo antes de que el parser lo registre. La posición en `<head>` sin atributos diferidos es un antipatrón crítico en desarrollo web cliente.
-2. **`async` vs `defer` (CE e):** 
-   * `async` debe reservarse exclusivamente para utilidades independientes y agnósticas al DOM (analítica, píxeles, publicidad).
-   * `defer` es obligatorio cuando existe dependencia del árbol DOM o dependencias secuenciales entre librerías.
-3. **Módulos ES6 (CE c):** Representan el presente y futuro del desarrollo web al aunar carga diferida nativa, encapsulamiento modular y compatibilidad con arquitecturas modernas basadas en empaquetadores (Vite, Webpack).
